@@ -12,7 +12,6 @@ app.use('/api', userRoute);
 const authRoute = require('./routes/authRoute');
 app.use('/', authRoute);
 
-
 app.listen(3000, () => {
     console.log('listening on 3000')
 });

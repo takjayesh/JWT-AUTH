@@ -1,13 +1,10 @@
 const User = require('../models/userModel');
 const bcrypt = require('bcrypt');
-
 const {validationResult} =require('express-validator');
-
 const mailer = require('../helpers/mailer');
 const randomstring = require('randomstring');
-
 const PasswordReset = require('../models/passwordReset');
-
+const jwt = require('jsonwebtoken');
 
 const userRegister = async (req, res) => {
     try {
@@ -137,7 +134,7 @@ const sendMailVerification = async (req, res) => {
     }  
 
 
-    const forgotPassword = async (req, res) => {
+const forgotPassword = async (req, res) => {
         try{
             const errors = validationResult(req);
 
@@ -159,8 +156,9 @@ const sendMailVerification = async (req, res) => {
             }
         
         const randomString = randomstring.generate(10);
-        const msg = `<p> hiii, ${userData.name} please verify your <a href = "http://127.0.0.1:3000/api/forgot-password?token=${randomString}">click herre to reset your passwprd</a>  </p>`;   
-        
+        const msg = `<p> hiii, ${userData.name} please verify your <a href = "http://127.0.0.1:3000/api/reset-password?token=${randomString}">click herre to reset your passwprd</a>  </p>`;   
+
+    PasswordReset.deleteMany({user_id: userData._id});    
     const passwordReset = new PasswordReset({
             user_id : userData._id,
             token: randomString
@@ -169,6 +167,11 @@ const sendMailVerification = async (req, res) => {
     await passwordReset.save();
     
     mailer.sendMail(userData.email, 'Password Reset', msg);
+
+    return res.status(200).json({ 
+        success: true,
+        msg: 'Reset link sent to your mail, please check your mail'
+    });
         
         }catch(error){
                return res.status(400).json({
@@ -178,4 +181,146 @@ const sendMailVerification = async (req, res) => {
         }
     }
 
-module.exports = {userRegister, mailVerification, sendMailVerification, forgotPassword};
+
+const resetPassword = async (req, res) => {
+    try{
+         if(req.query.token == undefined){
+             return res.render('404');
+         }
+        const resetData = await PasswortReset.findOne({token: req.query.token});
+             if(!resetData){
+               return res.render('404');
+             }
+            return res.render('reset-password', {resetData: resetData})
+    }catch(error){
+        return res.status(404).json({
+            success: false,
+            msg2: error.message
+        })
+    }
+}    
+
+
+const updatePassword = async (req, res) => {
+    try{
+      const {user_id, password, c_password} = request.body;
+      const resetData = await PasswortReset.findOne({user_id});
+
+      if(password != c_password){
+          return res.render('reset-password', {resetData: resetData, message: 'Password and confirm password not matched'});
+      }
+
+      const hashedPassword = await bcrypt.hash(c_password, 10);
+
+    await  User.findByIdAndUpdate({_id: user_id},{
+            $set:{
+                password: hashedPassword
+            }
+        });
+
+        await PasswordReset.deleteMany({user_id: user_id});
+
+        return res.redirect('/reset-success');
+      
+    }catch(error){
+       
+    }
+}
+
+const resetSuccess = async (req, res) => {
+    try{
+        return res.render('reset-success');
+    }catch(error){
+        return res.status(404).json({
+            success: false,
+            msg2: error.message
+        })
+    }
+}
+
+
+const generateAccessToken = async (user) => {
+    const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {expiresIn: '2h'});
+    return token;
+}
+
+const loginUser = async (req, res) => {
+    try{
+        const errors = validationResult(req);
+        if(!errors.isEmpty()){
+            return res.status(400).json({
+                success: false,
+                msg: 'Errors',
+                errors: errors.array()
+            });
+        }
+
+        const {email, password} = req.body;
+        const userData = await User.findOne({email});
+        if(!userData){
+            return res.status(400).json({
+                success: false,
+                message: 'Email and password not matched'
+            });
+        }
+
+        const passwordMatch = await bcrypt.compare(password, userData.password);
+        if(!passwordMatch){
+            return res.status(400).json({
+                success: false,
+                message: 'Email and password not matched'
+            });
+        }
+
+        if(userData.is_verified == 0){
+            return res.status(400).json({
+                success: false,
+                message: 'Please verify your email'
+            });
+        }       
+        
+       const accessToken = await generateAccessToken({user:userData});
+         return res.status(200).json({
+              success: true,
+              message: 'Login successfully',
+              user: userData,
+              accessToken: accessToken,
+              tokenType: 'Bearer'
+         });
+ 
+    }catch(error){
+
+    }
+}
+
+
+const userProfile = async (req, res) => {
+    try{
+
+        User.findById(req.userData.user._id); 
+
+        return res.status(200).json({
+            success: true,
+            data: req.userData
+        });
+
+    }catch(error){
+         
+        return res.status(404).json({
+            success: false,
+            msg: error.message
+        })
+    }
+}
+
+
+module.exports = {userRegister,
+                mailVerification,
+                sendMailVerification,
+                forgotPassword,
+                resetPassword,
+                updatePassword,
+                resetSuccess,
+                loginUser,
+                userProfile
+            };
