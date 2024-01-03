@@ -296,12 +296,12 @@ const loginUser = async (req, res) => {
 
 const userProfile = async (req, res) => {
     try{
-
-        User.findById(req.userData.user._id); 
+        const userData = req.user.user; 
 
         return res.status(200).json({
             success: true,
-            data: req.userData
+            msg: 'User profile data',
+            data: userData
         });
 
     }catch(error){
